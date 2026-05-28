@@ -146,6 +146,7 @@ if (isset($_GET['bootstrap_token']) && $_GET['bootstrap_token'] == '1') {
     <meta name="shopify-api-key" content="<?php echo htmlspecialchars($api_key); ?>">
     <title>Shopify App</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
+    <script src="https://cdn.shopify.com/shopifycloud/app-bridge.js"></script>
     <link rel="stylesheet" href="<?php echo htmlspecialchars($app_url, ENT_QUOTES, 'UTF-8'); ?>/assets/css/index.css">
 </head>
 <body>
@@ -257,7 +258,7 @@ if (isset($_GET['bootstrap_token']) && $_GET['bootstrap_token'] == '1') {
         bootstrapApp();
         document.addEventListener('click', function(e) {
             if (e.target && e.target.id === 'getStartedBtn') {
-                window.location.href = '/testing_app/pages/customers.php?shop=<?php echo urlencode($shop); ?>';
+                window.location.href = '/testing_app/pages/products.php?shop=<?php echo urlencode($shop); ?>';
             }
         });
     });
