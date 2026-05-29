@@ -89,8 +89,6 @@ function executeGraphQLMutation($access_token, $shop, $query, $variables = null)
 
     return array('success' => true, 'data' => $response);
 }
-
-// Fetch locations for inventory management
 if ($access_token) {
     $locationQuery = <<<GRAPHQL
 query {
@@ -112,13 +110,11 @@ GRAPHQL;
     }
 }
 
-// Fetch product data for editing
-if ($access_token && !$_SERVER['REQUEST_METHOD'] === 'POST') {
+if ($access_token && $_SERVER['REQUEST_METHOD'] !== 'POST') {
     $full_product_id = 'gid://shopify/Product/' . $product_id;
-    
     $getProductQuery = <<<GRAPHQL
-query getProduct {
-  node(id: "$full_product_id") {
+query getProduct(\$productId: ID!) {
+  node(id: \$productId) {
     ... on Product {
       id
       title
@@ -148,39 +144,21 @@ query getProduct {
 }
 GRAPHQL;
 
-    $url = "https://" . $shop . "/admin/api/" . $api_version . "/graphql.json";
-    $fields = json_encode(array('query' => $getProductQuery));
-    $headers = array(
-        "Content-Type: application/json",
-        "X-Shopify-Access-Token: " . $access_token
-    );
+    $getProductVariables = array('productId' => $full_product_id);
+    $getProductResult = executeGraphQLMutation($access_token, $shop, $getProductQuery, $getProductVariables);
 
-    $ch = curl_init();
-    curl_setopt($ch, CURLOPT_URL, $url);
-    curl_setopt($ch, CURLOPT_POST, 1);
-    curl_setopt($ch, CURLOPT_POSTFIELDS, $fields);
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-    curl_setopt($ch, CURLOPT_TIMEOUT, 30);
-    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
-
-    $result = curl_exec($ch);
-    $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
-
-    if ($http_code === 200) {
-        $data = json_decode($result, true);
-        if (isset($data['data']['node'])) {
-            $product_data = $data['data']['node'];
-            if (isset($product_data['variants']['edges'])) {
-                foreach ($product_data['variants']['edges'] as $variant) {
-                    $variants_data[] = $variant['node'];
-                }
-            }
-            if (isset($product_data['images']['edges']) && !empty($product_data['images']['edges'])) {
-                $images_data = $product_data['images']['edges'];
+    if ($getProductResult['success'] && isset($getProductResult['data']['data']['node'])) {
+        $product_data = $getProductResult['data']['data']['node'];
+        if (isset($product_data['variants']['edges'])) {
+            foreach ($product_data['variants']['edges'] as $variant) {
+                $variants_data[] = $variant['node'];
             }
         }
+        if (isset($product_data['images']['edges']) && !empty($product_data['images']['edges'])) {
+            $images_data = $product_data['images']['edges'];
+        }
+    } else {
+        $error_message = "Failed to fetch product data: " . json_encode($getProductResult['error']);
     }
 }
 
@@ -278,7 +256,57 @@ GRAPHQL;
             $errors = $updateVariantResult['data']['data']['productVariantsBulkUpdate']['userErrors'];
             $error_message = "Product updated but variant update failed: " . $errors[0]['message'];
         } else {
-            // Step 3: Update inventory if provided
+            $image_uploaded = false;
+            $image_url = '';
+
+            if (isset($_FILES['product_image']) && $_FILES['product_image']['error'] === UPLOAD_ERR_OK) {
+                $file_tmp = $_FILES['product_image']['tmp_name'];
+                $file_name = $_FILES['product_image']['name'];
+                $file_ext = strtolower(pathinfo($file_name, PATHINFO_EXTENSION));
+                $allowed_ext = array('jpg', 'jpeg', 'png', 'gif', 'webp');
+
+                if (in_array($file_ext, $allowed_ext)) {
+                    // Get numeric product ID for REST API
+                    $product_id_numeric = preg_replace('/[^0-9]/', '', $product_id);
+                    $rest_url = "https://" . $shop . "/admin/api/" . $api_version . "/products/" . $product_id_numeric . "/images.json";
+
+                    $image_data = file_get_contents($file_tmp);
+                    $base64_image = base64_encode($image_data);
+
+                    $post_data = array(
+                        'image' => array(
+                            'attachment' => $base64_image,
+                            'filename' => $file_name
+                        )
+                    );
+
+                    $rest_headers = array(
+                        "Content-Type: application/json",
+                        "X-Shopify-Access-Token: " . $access_token
+                    );
+
+                    $ch = curl_init();
+                    curl_setopt($ch, CURLOPT_URL, $rest_url);
+                    curl_setopt($ch, CURLOPT_POST, 1);
+                    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($post_data));
+                    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                    curl_setopt($ch, CURLOPT_HTTPHEADER, $rest_headers);
+                    curl_setopt($ch, CURLOPT_TIMEOUT, 60);
+                    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+
+                    $rest_result = curl_exec($ch);
+                    $rest_http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                    curl_close($ch);
+
+                    if ($rest_http_code === 200 || $rest_http_code === 201) {
+                        $image_uploaded = true;
+                        error_log("Product image updated successfully");
+                    } else {
+                        error_log("Failed to update product image. HTTP Code: " . $rest_http_code);
+                    }
+                }
+            }
+            $inventory_success = true;
             if ($inventory_quantity > 0 && !empty($location_id) && !empty($inventory_item_id)) {
                 $idempotency_key = uniqid('inventory_', true);
 
@@ -314,8 +342,18 @@ GRAPHQL;
                 );
 
                 $inventoryResult = executeGraphQLMutation($access_token, $shop, $inventoryMutation, $inventoryVariables);
+
+                if (!$inventoryResult['success']) {
+                    $inventory_success = false;
+                    $error_message = "Product and variant updated but inventory update failed: " . json_encode($inventoryResult['error']);
+                } elseif (isset($inventoryResult['data']['data']['inventorySetQuantities']['userErrors']) && !empty($inventoryResult['data']['data']['inventorySetQuantities']['userErrors'])) {
+                    $inventory_success = false;
+                    $errors = $inventoryResult['data']['data']['inventorySetQuantities']['userErrors'];
+                    $error_message = "Product and variant updated but inventory update failed: " . $errors[0]['message'];
+                }
             }
-            $product_updated = true;
+
+            $product_updated = $inventory_success;
         }
     }
 
@@ -328,81 +366,22 @@ GRAPHQL;
     }
 }
 
-// Get first variant data for the form
 $default_variant = !empty($variants_data) ? $variants_data[0] : null;
 $current_image = !empty($images_data) ? $images_data[0]['node']['originalSrc'] : '';
 ?>
 
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Edit Product - Shopify App</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="<?php echo htmlspecialchars($app_url, ENT_QUOTES, 'UTF-8'); ?>/assets/css/product_create.css">
-    <style>
-        .image-upload-container {
-            margin-top: 5px;
-        }
-        .image-preview-wrapper {
-            margin-bottom: 15px;
-            position: relative;
-            display: inline-block;
-        }
-        .image-preview {
-            position: relative;
-            display: inline-block;
-        }
-        .image-preview img {
-            max-width: 200px;
-            max-height: 200px;
-            border-radius: 8px;
-            border: 1px solid #e1e3e5;
-            padding: 4px;
-            background: #fafafb;
-        }
-        .remove-image-btn {
-            position: absolute;
-            top: -10px;
-            right: -10px;
-            width: 28px;
-            height: 28px;
-            background: #d82c0d;
-            color: white;
-            border: none;
-            border-radius: 50%;
-            cursor: pointer;
-            font-size: 18px;
-            font-weight: bold;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: all 0.2s;
-        }
-        .remove-image-btn:hover {
-            background: #b52306;
-            transform: scale(1.1);
-        }
-        .btn-upload {
-            background: #f1f2f4;
-            border: 1px dashed #c9cccf;
-            padding: 12px 24px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 500;
-            color: #202223;
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-        }
-        .btn-upload:hover {
-            background: #e6e8eb;
-            border-color: #008060;
-        }
-    </style>
+    <link rel="stylesheet"
+        href="<?php echo htmlspecialchars($app_url, ENT_QUOTES, 'UTF-8'); ?>/assets/css/product_edit.css">
 </head>
+
 <body>
     <?php renderNavigation($app_url, $shop); ?>
     <div class="content">
@@ -416,31 +395,33 @@ $current_image = !empty($images_data) ? $images_data[0]['node']['originalSrc'] :
                     <div class="form-group">
                         <label for="title">Product title <span class="required">*</span></label>
                         <input type="text" id="title" name="title" class="form-control" required
-                            placeholder="e.g., Classic T-Shirt" value="<?php echo htmlspecialchars($product_data ? $product_data['title'] : ''); ?>">
+                            placeholder="e.g., Classic T-Shirt"
+                            value="<?php echo htmlspecialchars($product_data ? $product_data['title'] : ''); ?>">
                     </div>
                     <div class="form-group">
                         <label for="description">Description</label>
                         <textarea id="description" name="description" class="form-control"
                             placeholder="Describe your product..."><?php echo htmlspecialchars($product_data ? $product_data['descriptionHtml'] : ''); ?></textarea>
-                        <div class="info-text">Supports HTML formatting</div>
                     </div>
                     <div class="form-row">
                         <div class="form-group">
                             <label for="price">Price <span class="required">*</span></label>
                             <input type="number" id="price" name="price" step="0.01" class="form-control" required
-                                placeholder="0.00" value="<?php echo htmlspecialchars($default_variant ? $default_variant['price'] : ''); ?>">
+                                placeholder="0.00"
+                                value="<?php echo htmlspecialchars($default_variant ? $default_variant['price'] : ''); ?>">
                         </div>
                         <div class="form-group">
                             <label for="sku">SKU</label>
-                            <input type="text" id="sku" name="sku" class="form-control" 
-                                placeholder="SKU-001" value="<?php echo htmlspecialchars($default_variant ? $default_variant['sku'] : ''); ?>">
+                            <input type="text" id="sku" name="sku" class="form-control" placeholder="SKU-001"
+                                value="<?php echo htmlspecialchars($default_variant ? $default_variant['sku'] : ''); ?>">
                         </div>
                     </div>
                     <div class="form-row">
                         <div class="form-group">
                             <label for="inventory_quantity">Inventory quantity</label>
                             <input type="number" id="inventory_quantity" name="inventory_quantity" class="form-control"
-                                value="<?php echo htmlspecialchars($default_variant ? $default_variant['inventoryQuantity'] : '0'); ?>" min="0">
+                                value="<?php echo htmlspecialchars($default_variant ? $default_variant['inventoryQuantity'] : '0'); ?>"
+                                min="0">
                             <div class="info-text">Set to 0 if you don't want to track inventory</div>
                         </div>
                         <div class="form-group">
@@ -455,10 +436,38 @@ $current_image = !empty($images_data) ? $images_data[0]['node']['originalSrc'] :
                             </select>
                         </div>
                     </div>
-                    
-                    <!-- Hidden fields for variant and inventory item IDs -->
-                    <input type="hidden" id="variant_id" name="variant_id" value="<?php echo htmlspecialchars($default_variant ? $default_variant['id'] : ''); ?>">
-                    <input type="hidden" id="inventory_item_id" name="inventory_item_id" value="<?php echo htmlspecialchars($default_variant && isset($default_variant['inventoryItem']) ? $default_variant['inventoryItem']['id'] : ''); ?>">
+
+                    <input type="hidden" id="variant_id" name="variant_id"
+                        value="<?php echo htmlspecialchars($default_variant ? $default_variant['id'] : ''); ?>">
+                    <input type="hidden" id="inventory_item_id" name="inventory_item_id"
+                        value="<?php echo htmlspecialchars($default_variant && isset($default_variant['inventoryItem']) ? $default_variant['inventoryItem']['id'] : ''); ?>">
+                </div>
+                <div class="form-group_image">
+                    <label for="product_image">Product Image</label>
+                    <div class="image-upload-container">
+                        <?php if (!empty($current_image)): ?>
+                            <div class="image-preview-wrapper" id="existingImageWrapper">
+                                <div class="image-preview">
+                                    <img id="existingImage" src="<?php echo htmlspecialchars($current_image); ?>"
+                                        alt="Current product image">
+                                    <button type="button" class="remove-image-btn" id="removeExistingImageBtn">×</button>
+                                </div>
+                            </div>
+                        <?php endif; ?>
+                        <div class="image-preview-wrapper" id="newImagePreviewWrapper" style="display: none;">
+                            <div class="image-preview">
+                                <img id="newImagePreview" src="" alt="New product preview">
+                                <button type="button" class="remove-image-btn" id="removeNewImageBtn">×</button>
+                            </div>
+                        </div>
+                        <div class="image-upload-area" id="imageUploadArea">
+                            <input type="file" id="product_image" name="product_image"
+                                accept="image/jpeg,image/png,image/jpg,image/gif,image/webp" style="display: none;">
+                            <button type="button" class="btn-upload" id="uploadImageBtn"><span
+                                    class="upload-icon"></span><?php echo !empty($current_image) ? 'Change Image' : 'Choose Image'; ?></button>
+                            <div class="info-text">Recommended: Square image, at least 512x512px. Max 20MB.</div>
+                        </div>
+                    </div>
                 </div>
                 <div class="form-actions">
                     <button type="button" class="btn btn-secondary"
@@ -481,9 +490,9 @@ $current_image = !empty($images_data) ? $images_data[0]['node']['originalSrc'] :
             var title = document.getElementById('title').value.trim();
             var price = document.getElementById('price').value.trim();
             var inventoryQuantity = document.getElementById('inventory_quantity').value;
-            if (!title) { showToast('Please enter a product title', 'error'); return; }
-            if (!price || parseFloat(price) < 0) { showToast('Please enter a valid price', 'error'); return; }
-            if (inventoryQuantity === '' || parseInt(inventoryQuantity) < 0) { showToast('Please enter a valid inventory quantity', 'error'); return; }
+            if (!title) { shopify.toast.show('Please enter a product title', 'error'); return; }
+            if (!price || parseFloat(price) < 0) { shopify.toast.show('Please enter a valid price', 'error'); return; }
+            if (inventoryQuantity === '' || parseInt(inventoryQuantity) < 0) { shopify.toast.show('Please enter a valid inventory quantity', 'error'); return; }
             showLoader(true);
             var formData = new FormData(this);
             formData.append('update_product', '1');
@@ -496,17 +505,88 @@ $current_image = !empty($images_data) ? $images_data[0]['node']['originalSrc'] :
                         try {
                             var response = JSON.parse(xhr.responseText);
                             if (response.success) {
-                                showToast(response.message, 'success');
+                                shopify.toast.show(response.message, 'success');
                                 setTimeout(function () { window.location.href = response.redirect; }, 2000);
-                            } else { showToast(response.message, 'error'); }
-                        } catch (e) { showToast('An error occurred. Please try again.', 'error'); }
-                    } else { showToast('Network error. Please try again.', 'error'); }
+                            } else { shopify.toast.show(response.message, 'error'); }
+                        } catch (e) { shopify.toast.show('An error occurred. Please try again.', 'error'); }
+                    } else { shopify.toast.show('Network error. Please try again.', 'error'); }
                 }
             };
             xhr.send(formData);
         });
         function showLoader(show) { var loader = document.getElementById('loaderOverlay'); if (show) { loader.classList.add('show'); } else { loader.classList.remove('show'); } }
         function showToast(message, type) { var toast = document.getElementById('toast'); toast.textContent = message; toast.className = 'toast show ' + type; setTimeout(function () { toast.className = 'toast'; }, 3000); }
+        var uploadImageBtn = document.getElementById('uploadImageBtn');
+        var productImageInput = document.getElementById('product_image');
+        var newImagePreviewWrapper = document.getElementById('newImagePreviewWrapper');
+        var newImagePreview = document.getElementById('newImagePreview');
+        var removeNewImageBtn = document.getElementById('removeNewImageBtn');
+        var existingImageWrapper = document.getElementById('existingImageWrapper');
+        var removeExistingImageBtn = document.getElementById('removeExistingImageBtn');
+
+        if (uploadImageBtn) {
+            uploadImageBtn.addEventListener('click', function () {
+                productImageInput.click();
+            });
+        }
+
+        if (productImageInput) {
+            productImageInput.addEventListener('change', function (e) {
+                var file = e.target.files[0];
+                if (file) {
+                    var allowedTypes = ['image/jpeg', 'image/png', 'image/jpg', 'image/gif', 'image/webp'];
+                    if (!allowedTypes.includes(file.type)) {
+                        shopify.toast.show('Please select a valid image file', 'error');
+                        productImageInput.value = '';
+                        return;
+                    }
+                    if (file.size > 20 * 1024 * 1024) {
+                        shopify.toast.show('Image size should be less than 20MB', 'error');
+                        productImageInput.value = '';
+                        return;
+                    }
+
+                    var reader = new FileReader();
+                    reader.onload = function (e) {
+                        newImagePreview.src = e.target.result;
+                        newImagePreviewWrapper.style.display = 'inline-flex';
+                        if (existingImageWrapper) {
+                            existingImageWrapper.style.display = 'none';
+                        }
+                        if (uploadImageBtn) {
+                            uploadImageBtn.innerHTML = '<span class="upload-icon">📷</span> Change Image';
+                        }
+                    };
+                    reader.readAsDataURL(file);
+                }
+            });
+        }
+        if (removeNewImageBtn) {
+            removeNewImageBtn.addEventListener('click', function () {
+                productImageInput.value = '';
+                newImagePreviewWrapper.style.display = 'none';
+                newImagePreview.src = '';
+                if (existingImageWrapper) {
+                    existingImageWrapper.style.display = 'inline-flex';
+                }
+
+                shopify.toast.show('New image removed', 'success');
+            });
+        }
+        if (removeExistingImageBtn) {
+            removeExistingImageBtn.addEventListener('click', function () {
+                if (confirm('Are you sure you want to remove the current product image?')) {
+                    existingImageWrapper.style.display = 'none';
+                    shopify.toast.show('Current image will be removed when you update the product', 'success');
+                    var hiddenInput = document.createElement('input');
+                    hiddenInput.type = 'hidden';
+                    hiddenInput.name = 'delete_existing_image';
+                    hiddenInput.value = '1';
+                    document.getElementById('editProductForm').appendChild(hiddenInput);
+                }
+            });
+        }
     </script>
 </body>
+
 </html>

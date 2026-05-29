@@ -55,12 +55,22 @@ body {
     font-size: 14px;
     color: #202223;
 }
+.form-group_image label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 500;
+    font-size: 14px;
+    color: #202223;
+}
 
 .form-group label .required {
     color: #d82c0d;
     margin-left: 4px;
 }
-
+.form-group_image label .required {
+    color: #d82c0d;
+    margin-left: 4px;
+}
 .form-control {
     width: 100%;
     padding: 12px;
@@ -248,16 +258,19 @@ select.form-control {
     background: white;
     cursor: pointer;
 }
-
-/* Image Upload Styles */
 .image-upload-container {
-    margin-top: 5px;
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 20px;
+    margin-top: 10px;
 }
 
 .image-preview-wrapper {
-    margin-bottom: 15px;
     position: relative;
-    display: inline-block;
+    display: inline-flex;
+    flex-shrink: 0;
 }
 
 .image-preview {
@@ -266,8 +279,9 @@ select.form-control {
 }
 
 .image-preview img {
-    max-width: 200px;
-    max-height: 200px;
+    width: 150px;
+    height: 150px;
+    object-fit: cover;
     border-radius: 8px;
     border: 1px solid #e1e3e5;
     padding: 4px;
@@ -278,19 +292,20 @@ select.form-control {
     position: absolute;
     top: -10px;
     right: -10px;
-    width: 28px;
-    height: 28px;
+    width: 26px;
+    height: 26px;
     background: #d82c0d;
     color: white;
     border: none;
     border-radius: 50%;
     cursor: pointer;
-    font-size: 18px;
+    font-size: 16px;
     font-weight: bold;
     display: flex;
     align-items: center;
     justify-content: center;
     transition: all 0.2s;
+    z-index: 10;
 }
 
 .remove-image-btn:hover {
@@ -299,7 +314,8 @@ select.form-control {
 }
 
 .image-upload-area {
-    margin-top: 10px;
+    flex: 1;
+    min-width: 200px;
 }
 
 .btn-upload {
@@ -326,7 +342,6 @@ select.form-control {
     font-size: 18px;
 }
 
-/* Responsive Design */
 @media (max-width: 640px) {
     .form-row {
         grid-template-columns: 1fr;
@@ -340,8 +355,45 @@ select.form-control {
         padding-right: 20px;
     }
     
-    .image-preview img {
-        max-width: 150px;
-        max-height: 150px;
+    .image-upload-container {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 15px;
+        margin-left: 30px;
     }
+    
+    .image-preview img {
+        width: 120px;
+        height: 120px;
+    }
+    
+    .image-upload-area {
+        width: 100%;
+    }
+}
+.form-group_image{
+    margin-left: 5%;
+}
+.form-body > .form-group {
+    margin-bottom: 24px;
+}
+
+.form-group:last-child {
+    margin-bottom: 24px;
+}
+
+.image-upload-container {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 20px;
+    margin: 0;
+    padding: 0;
+}
+
+.image-preview-wrapper,
+.image-upload-area {
+    margin: 0;
+    padding: 0;
 }

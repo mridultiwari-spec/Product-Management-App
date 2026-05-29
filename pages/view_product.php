@@ -210,8 +210,8 @@ GRAPHQL;
                         <div class="handle">Handle: <?php echo htmlspecialchars($product['handle']); ?></div>
                     </div>
                     <div style="display: flex; gap: 10px;">
-                        <a href="products.php?shop=<?php echo urlencode($shop); ?>" class="back-btn">← Back to Products</a>
-                        <a href="https://<?php echo htmlspecialchars($shop); ?>/admin/products/<?php echo htmlspecialchars($product_id); ?>/edit" target="_blank" class="edit-btn">Edit Product</a>
+                        <a href="products.php?shop=<?php echo urlencode($shop); ?>" class="back-btn">Back to Products</a>
+                        <a href="<?php echo htmlspecialchars($app_url, ENT_QUOTES, 'UTF-8'); ?>/pages/product_edit.php?shop=<?php echo urlencode($shop); ?>&product_id=<?php echo htmlspecialchars($product_id); ?>" class="edit-btn">Edit Product</a>
                     </div>
                 </div>
                 

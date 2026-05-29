@@ -196,7 +196,8 @@ GRAPHQL;
         $error_message = "Product creation failed: " . $errors[0]['message'];
     } elseif (isset($productResult['data']['data']['productCreate']['product'])) {
         $product = $productResult['data']['data']['productCreate']['product'];
-        $product_id = $product['id'];
+        $product_id_graphql = $product['id'];
+         $product_id = preg_replace('/[^0-9]/', '', $product_id_graphql);
 
         error_log("=== PRODUCT CREATED ===");
         error_log("Product ID: " . $product_id);
@@ -215,7 +216,6 @@ GRAPHQL;
             error_log("File size: " . $_FILES['product_image']['size']);
 
             if (in_array($file_ext, $allowed_ext)) {
-                // Use REST API directly - most reliable approach
                 $rest_url = "https://" . $shop . "/admin/api/" . $api_version . "/products/" . $product_id . "/images.json";
                 
                 $image_data = file_get_contents($file_tmp);
@@ -288,7 +288,7 @@ query getProductVariant(\$productId: ID!) {
 }
 GRAPHQL;
 
-        $getVariantVariables = array('productId' => $product_id);
+        $getVariantVariables = array('productId' => $product_id_graphql);
         $getVariantResult = executeGraphQLMutation($access_token, $shop, $getVariantQuery, $getVariantVariables);
 
         if (!$getVariantResult['success']) {
@@ -327,7 +327,7 @@ GRAPHQL;
                 $errors = $trackingResult['data']['data']['inventoryItemUpdate']['userErrors'];
                 $error_message = "Product created but failed to enable inventory tracking: " . $errors[0]['message'];
             } else {
-                $updateResult = updateProductVariant($access_token, $shop, $product_id, $default_variant_id, $price, $sku);
+                $updateResult = updateProductVariant($access_token, $shop, $product_id_graphql, $default_variant_id, $price, $sku);
 
                 if (!$updateResult['success']) {
                     $error_message = "Product created but variant update failed: " . json_encode($updateResult['error']);
@@ -408,74 +408,6 @@ GRAPHQL;
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet"
         href="<?php echo htmlspecialchars($app_url, ENT_QUOTES, 'UTF-8'); ?>/assets/css/product_create.css">
-    <style>
-        .image-upload-container {
-            margin-top: 5px;
-        }
-
-        .image-preview-wrapper {
-            margin-bottom: 15px;
-            position: relative;
-            display: inline-block;
-        }
-
-        .image-preview {
-            position: relative;
-            display: inline-block;
-        }
-
-        .image-preview img {
-            max-width: 200px;
-            max-height: 200px;
-            border-radius: 8px;
-            border: 1px solid #e1e3e5;
-            padding: 4px;
-            background: #fafafb;
-        }
-
-        .remove-image-btn {
-            position: absolute;
-            top: -10px;
-            right: -10px;
-            width: 28px;
-            height: 28px;
-            background: #d82c0d;
-            color: white;
-            border: none;
-            border-radius: 50%;
-            cursor: pointer;
-            font-size: 18px;
-            font-weight: bold;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: all 0.2s;
-        }
-
-        .remove-image-btn:hover {
-            background: #b52306;
-            transform: scale(1.1);
-        }
-
-        .btn-upload {
-            background: #f1f2f4;
-            border: 1px dashed #c9cccf;
-            padding: 12px 24px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 500;
-            color: #202223;
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .btn-upload:hover {
-            background: #e6e8eb;
-            border-color: #008060;
-        }
-    </style>
 </head>
 
 <body>
@@ -497,7 +429,6 @@ GRAPHQL;
                         <label for="description">Description</label>
                         <textarea id="description" name="description" class="form-control"
                             placeholder="Describe your product..."></textarea>
-                        <div class="info-text">Supports HTML formatting</div>
                     </div>
                     <div class="form-row">
                         <div class="form-group">
@@ -542,7 +473,7 @@ GRAPHQL;
                                 <input type="file" id="product_image" name="product_image"
                                     accept="image/jpeg,image/png,image/jpg,image/gif,image/webp" style="display: none;">
                                 <button type="button" class="btn-upload" id="uploadImageBtn"><span
-                                        class="upload-icon">📷</span> Choose Image</button>
+                                        class="upload-icon"></span> Choose Image</button>
                                 <div class="info-text">Recommended: Square image, at least 512x512px. Max 20MB.</div>
                             </div>
                         </div>
@@ -569,9 +500,9 @@ GRAPHQL;
             var title = document.getElementById('title').value.trim();
             var price = document.getElementById('price').value.trim();
             var inventoryQuantity = document.getElementById('inventory_quantity').value;
-            if (!title) { showToast('Please enter a product title', 'error'); return; }
-            if (!price || parseFloat(price) < 0) { showToast('Please enter a valid price', 'error'); return; }
-            if (inventoryQuantity === '' || parseInt(inventoryQuantity) < 0) { showToast('Please enter a valid inventory quantity', 'error'); return; }
+            if (!title) { shopify.toast.show('Please enter a product title', 'error'); return; }
+            if (!price || parseFloat(price) < 0) { shopify.toast.show('Please enter a valid price', 'error'); return; }
+            if (inventoryQuantity === '' || parseInt(inventoryQuantity) < 0) { shopify.toast.show('Please enter a valid inventory quantity', 'error'); return; }
             showLoader(true);
             var formData = new FormData(this);
             formData.append('create_product', '1');
@@ -584,11 +515,11 @@ GRAPHQL;
                         try {
                             var response = JSON.parse(xhr.responseText);
                             if (response.success) {
-                                showToast(response.message, 'success');
+                                shopify.toast.show(response.message, 'success');
                                 setTimeout(function () { window.location.href = response.redirect; }, 2000);
-                            } else { showToast(response.message, 'error'); }
-                        } catch (e) { showToast('An error occurred. Please try again.', 'error'); }
-                    } else { showToast('Network error. Please try again.', 'error'); }
+                            } else { shopify.toast.show(response.message, 'error'); }
+                        } catch (e) { shopify.toast.show('An error occurred. Please try again.', 'error'); }
+                    } else { shopify.toast.show('Network error. Please try again.', 'error'); }
                 }
             };
             xhr.send(formData);
@@ -606,16 +537,15 @@ GRAPHQL;
                 var file = e.target.files[0];
                 if (file) {
                     var allowedTypes = ['image/jpeg', 'image/png', 'image/jpg', 'image/gif', 'image/webp'];
-                    if (!allowedTypes.includes(file.type)) { showToast('Please select a valid image file', 'error'); productImageInput.value = ''; return; }
-                    if (file.size > 20 * 1024 * 1024) { showToast('Image size should be less than 20MB', 'error'); productImageInput.value = ''; return; }
+                    if (!allowedTypes.includes(file.type)) { shopify.toast.show('Please select a valid image file', 'error'); productImageInput.value = ''; return; }
+                    if (file.size > 20 * 1024 * 1024) { shopify.toast.show('Image size should be less than 20MB', 'error'); productImageInput.value = ''; return; }
                     var reader = new FileReader();
                     reader.onload = function (e) { imagePreview.src = e.target.result; imagePreviewWrapper.style.display = 'inline-block'; };
                     reader.readAsDataURL(file);
                 }
             });
         }
-        if (removeImageBtn) { removeImageBtn.addEventListener('click', function () { productImageInput.value = ''; imagePreview.src = ''; imagePreviewWrapper.style.display = 'none'; showToast('Image removed', 'success'); }); }
+        if (removeImageBtn) { removeImageBtn.addEventListener('click', function () { productImageInput.value = ''; imagePreview.src = ''; imagePreviewWrapper.style.display = 'none'; shopify.toast.show('Image removed', 'success'); }); }
     </script>
 </body>
-
 </html>

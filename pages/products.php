@@ -266,7 +266,6 @@ if ($totalProducts) {
                     <?php if ($totalProducts): ?>
                         of <?php echo $totalPages; ?> pages (Total <?php echo number_format($totalProducts); ?> products)
                     <?php endif; ?>
-                    - <?php echo count($allProducts); ?> products displayed
                 </div>
                 <a href="<?php echo htmlspecialchars($app_url, ENT_QUOTES, 'UTF-8'); ?>/pages/create_product.php?shop=<?php echo urlencode($shop); ?>"
                     class="create-product-btn">
@@ -319,7 +318,25 @@ if ($totalProducts) {
         <pre><?php print_r($data); ?></pre>
     <?php endif; ?>
     </div>
-
+    <!-- Delete Confirmation Modal -->
+    <div id="deleteModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Delete Product</h3>
+                <span class="modal-close">&times;</span>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete this product?</p>
+                <p class="product-name" id="deleteProductName"></p>
+                <p class="warning-text">This action cannot be undone. The product will be permanently removed from your
+                    store.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-modal btn-modal-secondary" id="cancelDeleteBtn">Cancel</button>
+                <button type="button" class="btn-modal btn-modal-danger" id="confirmDeleteBtn">Delete Product</button>
+            </div>
+        </div>
+    </div>
     <script>
         var allProducts = <?php echo json_encode($productsJson); ?>;
         var productsPerPage = <?php echo $productsPerPage; ?>;
@@ -347,7 +364,7 @@ if ($totalProducts) {
                 if (filteredProducts.length > 0) {
                     countInfo.innerHTML = 'Showing ' + (startIndex + 1) + ' - ' + endIndex + ' of ' + totalProducts + ' filtered products';
                 } else {
-                    countInfo.innerHTML = 'Showing page ' + currentPage + ' of ' + totalPages + ' (Total ' + totalProducts + ' products) - ' + pageProducts.length + ' products displayed';
+                    countInfo.innerHTML = 'Showing page ' + currentPage + ' of ' + totalPages + ' (Total ' + totalProducts + ' products)';
                 }
             }
             for (var i = 0; i < pageProducts.length; i++) {
@@ -387,6 +404,7 @@ if ($totalProducts) {
                 actionsCell.innerHTML = '<div class="action-buttons">' +
                     '<a href="<?php echo htmlspecialchars($app_url, ENT_QUOTES, 'UTF-8'); ?>/pages/view_product.php?shop=' + encodeURIComponent(p.shop) + '&product_id=' + p.product_numeric_id + '" class="btn-icon btn-view">View</a>' +
                     '<a href="<?php echo htmlspecialchars($app_url, ENT_QUOTES, 'UTF-8'); ?>/pages/product_edit.php?shop=' + encodeURIComponent(p.shop) + '&product_id=' + p.product_numeric_id + '" class="btn-icon btn-edit">Edit</a>' +
+                    '<button onclick="showDeleteModal(\'' + p.product_numeric_id + '\', \'' + escapeHtml(p.title).replace(/'/g, "\\'") + '\')" class="btn-icon btn-delete">Delete</button>' +
                     '</div>';
             }
             renderPagination(totalPages);
@@ -495,7 +513,149 @@ if ($totalProducts) {
                 });
             }
         });
+        function showLoader(show) {
+            var loader = document.getElementById('loaderOverlay');
+            if (!loader) {
+                if (show) {
+                    var overlay = document.createElement('div');
+                    overlay.id = 'loaderOverlay';
+                    overlay.className = 'loader-overlay';
+                    overlay.innerHTML = '<div class="loader-content"><div class="spinner"></div><div class="loader-text">Processing...</div></div>';
+                    document.body.appendChild(overlay);
+                    overlay.style.display = 'flex';
+                }
+                return;
+            }
+
+            if (show) {
+                loader.style.display = 'flex';
+                loader.classList.add('show');
+            } else {
+                loader.style.display = 'none';
+                loader.classList.remove('show');
+            }
+        }
+
+        function showToast(message, type) {
+            var toast = document.getElementById('toast');
+            if (!toast) {
+                var toastDiv = document.createElement('div');
+                toastDiv.id = 'toast';
+                toastDiv.className = 'toast';
+                document.body.appendChild(toastDiv);
+                toast = toastDiv;
+            }
+
+            toast.textContent = message;
+            toast.className = 'toast show ' + type;
+            setTimeout(function () {
+                toast.className = 'toast';
+            }, 3000);
+        }
+
+        // Delete modal functionality
+        var deleteModal = document.getElementById('deleteModal');
+        var modalClose = document.querySelector('.modal-close');
+        var cancelDeleteBtn = document.getElementById('cancelDeleteBtn');
+        var confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
+        var deleteProductName = document.getElementById('deleteProductName');
+        var productToDelete = null;
+        var deleteProductTitle = null;
+
+        function showDeleteModal(productId, productTitle) {
+            productToDelete = productId;
+            deleteProductTitle = productTitle;
+            deleteProductName.innerHTML = '<strong>"' + escapeHtml(productTitle) + '"</strong>';
+            deleteModal.style.display = 'block';
+        }
+
+        function closeDeleteModal() {
+            deleteModal.style.display = 'none';
+            productToDelete = null;
+            deleteProductTitle = null;
+        }
+
+        function deleteProduct() {
+            if (!productToDelete) {
+                shopify.toast.show('No product selected for deletion', 'error');
+                return;
+            }
+
+            showLoader(true);
+
+            var xhr = new XMLHttpRequest();
+            xhr.open('POST', '<?php echo htmlspecialchars($app_url, ENT_QUOTES, 'UTF-8'); ?>/pages/delete_product.php', true);
+            xhr.setRequestHeader('Content-Type', 'application/json');
+
+            xhr.onreadystatechange = function () {
+                if (xhr.readyState === 4) {
+                    showLoader(false);
+                    if (xhr.status === 200) {
+                        try {
+                            var response = JSON.parse(xhr.responseText);
+                            if (response.success) {
+                                shopify.toast.show(response.message, 'success');
+                                closeDeleteModal();
+                                setTimeout(function () {
+                                    window.location.reload();
+                                }, 2000);
+                                for (var i = 0; i < allProducts.length; i++) {
+                                    if (allProducts[i].product_numeric_id == productToDelete) {
+                                        allProducts.splice(i, 1);
+                                        break;
+                                    }
+                                }
+                                currentPage = 1;
+                                renderProductsTable();
+
+                                var countInfo = document.querySelector('.product-count-info');
+                                if (countInfo) {
+                                    var totalPages = Math.ceil(allProducts.length / productsPerPage);
+                                    countInfo.innerHTML = 'Showing page 1 of ' + totalPages + ' (Total ' + allProducts.length + ' products)';
+                                }
+                            } else {
+                                shopify.toast.show(response.message, 'error');
+                            }
+                        } catch (e) {
+                            shopify.toast.show('An error occurred while deleting the product', 'error');
+                        }
+                    } else {
+                        shopify.toast.show('Network error. Please try again.', 'error');
+                    }
+                }
+            };
+
+            var requestData = JSON.stringify({
+                shop: '<?php echo $shop; ?>',
+                product_id: productToDelete
+            });
+
+            xhr.send(requestData);
+        }
+        if (modalClose) {
+            modalClose.addEventListener('click', closeDeleteModal);
+        }
+
+        if (cancelDeleteBtn) {
+            cancelDeleteBtn.addEventListener('click', closeDeleteModal);
+        }
+
+        if (confirmDeleteBtn) {
+            confirmDeleteBtn.addEventListener('click', deleteProduct);
+        }
+        window.addEventListener('click', function (event) {
+            if (event.target == deleteModal) {
+                closeDeleteModal();
+            }
+        });
     </script>
+    <div id="loaderOverlay" class="loader-overlay" style="display: none;">
+        <div class="loader-content">
+            <div class="spinner"></div>
+            <div class="loader-text">Processing...</div>
+        </div>
+    </div>
+    <div id="toast" class="toast"></div>
 </body>
 
 </html>

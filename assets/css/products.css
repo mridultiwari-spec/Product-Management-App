@@ -460,3 +460,257 @@
                 justify-content: center;
             }
         }
+        /* Modal Styles */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    overflow: auto;
+}
+
+.modal-content {
+    background-color: white;
+    margin: 15% auto;
+    width: 90%;
+    max-width: 500px;
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+    animation: modalSlideIn 0.3s ease-out;
+}
+
+@keyframes modalSlideIn {
+    from {
+        transform: translateY(-50px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+.modal-header {
+    padding: 20px 24px;
+    border-bottom: 1px solid #e1e3e5;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.modal-header h3 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+    color: #202223;
+}
+
+.modal-close {
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+    color: #5c5f62;
+    transition: color 0.2s;
+}
+
+.modal-close:hover {
+    color: #202223;
+}
+
+.modal-body {
+    padding: 24px;
+}
+
+.modal-body p {
+    margin: 0 0 12px 0;
+    color: #202223;
+    font-size: 14px;
+}
+
+.product-name {
+    font-weight: 600;
+    color: #d82c0d;
+    background: #fef2f0;
+    padding: 8px 12px;
+    border-radius: 4px;
+    margin: 12px 0;
+}
+
+.warning-text {
+    color: #d82c0d;
+    font-size: 12px;
+    margin-top: 12px;
+}
+
+.modal-footer {
+    padding: 16px 24px;
+    border-top: 1px solid #e1e3e5;
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+}
+
+.btn-modal {
+    padding: 8px 16px;
+    border-radius: 4px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: none;
+}
+
+.btn-modal-secondary {
+    background: white;
+    border: 1px solid #c9cccf;
+    color: #202223;
+}
+
+.btn-modal-secondary:hover {
+    background: #f6f6f7;
+}
+
+.btn-modal-danger {
+    background: #d82c0d;
+    color: white;
+}
+
+.btn-modal-danger:hover {
+    background: #b52306;
+}
+
+.btn-delete {
+    background: #d82c0d;
+    color: white;
+}
+
+.btn-delete:hover {
+    background: #b52306;
+    transform: translateY(-1px);
+}
+
+.action-buttons {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.btn-icon {
+    padding: 6px 12px;
+    border-radius: 4px;
+    text-decoration: none;
+    font-size: 12px;
+    font-weight: 500;
+    transition: all 0.2s;
+    display: inline-block;
+    cursor: pointer;
+    border: none;
+}
+
+.btn-view {
+    background: #008060;
+    color: white;
+}
+
+.btn-view:hover {
+    background: #006e52;
+}
+
+.btn-edit {
+    background: #3b82f6;
+    color: white;
+}
+
+.btn-edit:hover {
+    background: #2563eb;
+}
+
+/* Loader Overlay */
+.loader-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 999;
+    justify-content: center;
+    align-items: center;
+}
+
+.loader-overlay.show {
+    display: flex;
+}
+
+.loader-content {
+    background: white;
+    padding: 30px;
+    border-radius: 8px;
+    text-align: center;
+    min-width: 280px;
+}
+
+.spinner {
+    border: 3px solid #f3f3f3;
+    border-top: 3px solid #008060;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    animation: spin 1s linear infinite;
+    margin: 0 auto 20px;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.loader-text {
+    color: #202223;
+    font-size: 14px;
+}
+
+/* Toast Notification */
+.toast {
+    visibility: hidden;
+    min-width: 300px;
+    background-color: #202223;
+    color: white;
+    text-align: center;
+    border-radius: 4px;
+    padding: 16px;
+    position: fixed;
+    z-index: 1000;
+    bottom: 30px;
+    right: 30px;
+    font-size: 14px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.toast.show {
+    visibility: visible;
+    animation: fadein 0.5s, fadeout 0.5s 2.5s;
+}
+
+.toast.success {
+    background-color: #008060;
+}
+
+.toast.error {
+    background-color: #d82c0d;
+}
+
+@keyframes fadein {
+    from { bottom: 0; opacity: 0; }
+    to { bottom: 30px; opacity: 1; }
+}
+
+@keyframes fadeout {
+    from { bottom: 30px; opacity: 1; }
+    to { bottom: 0; opacity: 0; }
+}
