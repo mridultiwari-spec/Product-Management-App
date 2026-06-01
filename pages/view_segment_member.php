@@ -46,10 +46,11 @@ $customer = null;
 $orders = array();
 $error = null;
 $addresses = array();
-function executeGraphQLQuery($access_token, $shop, $query, $variables = null) {
+function executeGraphQLQuery($access_token, $shop, $query, $variables = null)
+{
     global $api_version;
     $url = "https://" . $shop . "/admin/api/" . $api_version . "/graphql.json";
-    
+
     $payload = array('query' => $query);
     if ($variables) {
         $payload['variables'] = $variables;
@@ -188,10 +189,9 @@ GRAPHQL;
 
     $variables = array('customerId' => $full_customer_id);
     $result = executeGraphQLQuery($access_token, $shop, $customerQuery, $variables);
-    
+
     if ($result['success'] && isset($result['data']['data']['customer'])) {
         $customerData = $result['data']['data']['customer'];
-        
         $displayName = '';
         if (!empty($customerData['firstName'])) {
             $displayName = $customerData['firstName'];
@@ -203,14 +203,10 @@ GRAPHQL;
         } else {
             $displayName = 'Anonymous Customer';
         }
-        
-        // Get marketing consent
         $acceptsMarketing = false;
         if (isset($customerData['emailMarketingConsent']['marketingState'])) {
             $acceptsMarketing = ($customerData['emailMarketingConsent']['marketingState'] === 'SUBSCRIBED');
         }
-        
-        // Extract addresses - Now directly an array, not with edges
         $addressList = array();
         if (isset($customerData['addresses']) && is_array($customerData['addresses'])) {
             foreach ($customerData['addresses'] as $addr) {
@@ -219,27 +215,19 @@ GRAPHQL;
                 }
             }
         }
-        
-        // Extract orders
         $orderList = array();
         if (isset($customerData['orders']['edges'])) {
             foreach ($customerData['orders']['edges'] as $orderEdge) {
                 $order = $orderEdge['node'];
                 $order_numeric_id = preg_replace('/^gid:\/\/shopify\/Order\//', '', $order['id']);
-                
-                // Get total price
                 $totalPrice = '0.00';
                 if (isset($order['totalPriceSet']['shopMoney']['amount'])) {
                     $totalPrice = $order['totalPriceSet']['shopMoney']['amount'];
                 }
-                
-                // Get currency
                 $currency = 'USD';
                 if (isset($order['totalPriceSet']['shopMoney']['currencyCode'])) {
                     $currency = $order['totalPriceSet']['shopMoney']['currencyCode'];
                 }
-                
-                // Get line items
                 $lineItems = array();
                 if (isset($order['lineItems']['edges'])) {
                     foreach ($order['lineItems']['edges'] as $itemEdge) {
@@ -251,7 +239,7 @@ GRAPHQL;
                         );
                     }
                 }
-                
+
                 $orderList[] = array(
                     'id' => $order_numeric_id,
                     'name' => $order['name'],
@@ -266,7 +254,7 @@ GRAPHQL;
                 );
             }
         }
-        
+
         $customer = array(
             'id' => $customer_id,
             'displayName' => $displayName,
@@ -286,7 +274,7 @@ GRAPHQL;
             'addresses' => $addressList,
             'orders' => $orderList
         );
-        
+
     } else {
         $error = "Customer not found or unable to fetch customer data.";
         if (isset($result['error'])) {
@@ -300,18 +288,17 @@ GRAPHQL;
 
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?php echo $customer ? htmlspecialchars($customer['displayName']) : 'Customer Details'; ?> - Shopify App</title>
+    <title><?php echo $customer ? htmlspecialchars($customer['displayName']) : 'Customer Details'; ?> - Shopify App
+    </title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="<?php echo htmlspecialchars($app_url, ENT_QUOTES, 'UTF-8'); ?>/assets/css/view_customer.css">
+    <link rel="stylesheet"
+        href="<?php echo htmlspecialchars($app_url, ENT_QUOTES, 'UTF-8'); ?>/assets/css/view_customer.css">
 </head>
-
 <body>
     <?php renderNavigation($app_url, $shop); ?>
-    
     <div class="content">
         <?php if ($error): ?>
             <div class="error-message">
@@ -321,14 +308,25 @@ GRAPHQL;
                 </div>
             </div>
         <?php elseif ($customer): ?>
-            <a href="customers.php?shop=<?php echo urlencode($shop); ?>" class="back-button">Back to Customers</a>
-            
+            <?php
+            $back_segment_id = isset($_GET['segment_id']) ? $_GET['segment_id'] : '';
+            $back_segment_name = isset($_GET['segment_name']) ? urldecode($_GET['segment_name']) : '';
+
+            $back_url = "segment_customers.php?shop=" . urlencode($shop);
+            if (!empty($back_segment_id)) {
+                $back_url .= "&segment_id=" . urlencode($back_segment_id);
+                if (!empty($back_segment_name)) {
+                    $back_url .= "&segment_name=" . urlencode($back_segment_name);
+                }
+            }
+            ?>
+            <a href="<?php echo $back_url; ?>" class="back-button">← Back to
+                <?php echo !empty($back_segment_name) ? htmlspecialchars($back_segment_name) : 'Customers'; ?></a>
+
             <div class="page-header">
                 <h1><?php echo htmlspecialchars($customer['displayName']); ?></h1>
                 <p class="subtitle">Customer ID: <?php echo htmlspecialchars($customer['id']); ?></p>
             </div>
-            
-            <!-- Customer Information Section -->
             <div class="section-title">Customer Information</div>
             <div class="info-grid">
                 <div class="info-card">
@@ -350,7 +348,8 @@ GRAPHQL;
                 </div>
                 <div class="info-card">
                     <div class="info-label">Total Spent</div>
-                    <div class="info-value"><?php echo $customer['currency']; ?> <?php echo number_format($customer['amountSpent'], 2); ?></div>
+                    <div class="info-value"><?php echo $customer['currency']; ?>
+                        <?php echo number_format($customer['amountSpent'], 2); ?></div>
                 </div>
                 <div class="info-card">
                     <div class="info-label">Accepts Marketing</div>
@@ -373,59 +372,65 @@ GRAPHQL;
                     <div class="info-value"><?php echo htmlspecialchars($customer['updatedAt']); ?></div>
                 </div>
             </div>
-            
-            <!-- Default Address Section -->
             <?php if ($customer['defaultAddress'] && (!empty($customer['defaultAddress']['address1']) || !empty($customer['defaultAddress']['city']))): ?>
-            <div class="section-title">Default Address</div>
-            <div class="address-card">
-                <?php
-                $addr = $customer['defaultAddress'];
-                $addressLines = array();
-                if (!empty($addr['address1'])) $addressLines[] = $addr['address1'];
-                if (!empty($addr['address2'])) $addressLines[] = $addr['address2'];
-                if (!empty($addr['city'])) $addressLines[] = $addr['city'];
-                if (!empty($addr['province'])) $addressLines[] = $addr['province'];
-                if (!empty($addr['zip'])) $addressLines[] = $addr['zip'];
-                if (!empty($addr['country'])) $addressLines[] = $addr['country'];
-                ?>
-                <?php if (!empty($addressLines)): ?>
-                    <p><?php echo implode(', ', $addressLines); ?></p>
-                <?php else: ?>
-                    <p>No address details available</p>
-                <?php endif; ?>
-                <?php if (!empty($addr['phone'])): ?>
-                    <p><strong>Phone:</strong> <?php echo htmlspecialchars($addr['phone']); ?></p>
-                <?php endif; ?>
-            </div>
-            <?php endif; ?>
-            
-            <!-- All Addresses Section -->
-            <?php if (!empty($customer['addresses'])): ?>
-            <div class="section-title">All Addresses (<?php echo count($customer['addresses']); ?>)</div>
-            <div class="info-grid">
-                <?php foreach ($customer['addresses'] as $addr): ?>
+                <div class="section-title">Default Address</div>
                 <div class="address-card">
                     <?php
+                    $addr = $customer['defaultAddress'];
                     $addressLines = array();
-                    if (!empty($addr['address1'])) $addressLines[] = $addr['address1'];
-                    if (!empty($addr['address2'])) $addressLines[] = $addr['address2'];
-                    if (!empty($addr['city'])) $addressLines[] = $addr['city'];
-                    if (!empty($addr['province'])) $addressLines[] = $addr['province'];
-                    if (!empty($addr['zip'])) $addressLines[] = $addr['zip'];
-                    if (!empty($addr['country'])) $addressLines[] = $addr['country'];
+                    if (!empty($addr['address1']))
+                        $addressLines[] = $addr['address1'];
+                    if (!empty($addr['address2']))
+                        $addressLines[] = $addr['address2'];
+                    if (!empty($addr['city']))
+                        $addressLines[] = $addr['city'];
+                    if (!empty($addr['province']))
+                        $addressLines[] = $addr['province'];
+                    if (!empty($addr['zip']))
+                        $addressLines[] = $addr['zip'];
+                    if (!empty($addr['country']))
+                        $addressLines[] = $addr['country'];
                     ?>
-                    <p><?php echo implode(', ', $addressLines); ?></p>
+                    <?php if (!empty($addressLines)): ?>
+                        <p><?php echo implode(', ', $addressLines); ?></p>
+                    <?php else: ?>
+                        <p>No address details available</p>
+                    <?php endif; ?>
                     <?php if (!empty($addr['phone'])): ?>
                         <p><strong>Phone:</strong> <?php echo htmlspecialchars($addr['phone']); ?></p>
                     <?php endif; ?>
                 </div>
-                <?php endforeach; ?>
-            </div>
             <?php endif; ?>
-            
-            <!-- Orders Section -->
+            <?php if (!empty($customer['addresses'])): ?>
+                <div class="section-title">All Addresses (<?php echo count($customer['addresses']); ?>)</div>
+                <div class="info-grid">
+                    <?php foreach ($customer['addresses'] as $addr): ?>
+                        <div class="address-card">
+                            <?php
+                            $addressLines = array();
+                            if (!empty($addr['address1']))
+                                $addressLines[] = $addr['address1'];
+                            if (!empty($addr['address2']))
+                                $addressLines[] = $addr['address2'];
+                            if (!empty($addr['city']))
+                                $addressLines[] = $addr['city'];
+                            if (!empty($addr['province']))
+                                $addressLines[] = $addr['province'];
+                            if (!empty($addr['zip']))
+                                $addressLines[] = $addr['zip'];
+                            if (!empty($addr['country']))
+                                $addressLines[] = $addr['country'];
+                            ?>
+                            <p><?php echo implode(', ', $addressLines); ?></p>
+                            <?php if (!empty($addr['phone'])): ?>
+                                <p><strong>Phone:</strong> <?php echo htmlspecialchars($addr['phone']); ?></p>
+                            <?php endif; ?>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+            <?php endif; ?>
             <div class="section-title">Order History (<?php echo count($customer['orders']); ?> orders)</div>
-            
+
             <?php if (!empty($customer['orders'])): ?>
                 <div class="orders-table-container">
                     <table class="orders-table">
@@ -441,59 +446,63 @@ GRAPHQL;
                         </thead>
                         <tbody>
                             <?php foreach ($customer['orders'] as $order): ?>
-                            <tr>
-                                <td>
-                                    <strong><?php echo htmlspecialchars($order['name']); ?></strong>
-                                 </td>
-                                 <td><?php echo htmlspecialchars($order['createdAt']); ?></td>
-                                 <td>
-                                    <?php 
-                                    $itemCount = count($order['lineItems']);
-                                    $itemSummary = array();
-                                    foreach ($order['lineItems'] as $item) {
-                                        $itemSummary[] = $item['quantity'] . 'x ' . htmlspecialchars($item['title']);
-                                    }
-                                    echo implode('<br>', array_slice($itemSummary, 0, 3));
-                                    if (count($itemSummary) > 3) {
-                                        echo '<br>+' . (count($itemSummary) - 3) . ' more items';
-                                    }
-                                    ?>
-                                 </td>
-                                 <td>
-                                    <?php echo $order['currency']; ?> <?php echo number_format($order['totalPrice'], 2); ?>
-                                    <br>
-                                    <small style="color: #5c5f62;">
-                                        (Subtotal: <?php echo number_format($order['subtotalPrice'], 2); ?>
-                                        <br>Tax: <?php echo number_format($order['totalTax'], 2); ?>)
-                                    </small>
-                                 </td>
-                                 <td>
-                                    <span class="order-status status-<?php echo str_replace(' ', '_', strtolower($order['financialStatus'])); ?>">
-                                        <?php echo htmlspecialchars($order['financialStatus']); ?>
-                                    </span>
-                                 </td>
-                                 <td>
-                                    <span class="order-status status-<?php echo str_replace(' ', '_', strtolower($order['fulfillmentStatus'])); ?>">
-                                        <?php echo htmlspecialchars($order['fulfillmentStatus']); ?>
-                                    </span>
-                                 </td>
-                             </tr>
+                                <tr>
+                                    <td>
+                                        <strong><?php echo htmlspecialchars($order['name']); ?></strong>
+                                    </td>
+                                    <td><?php echo htmlspecialchars($order['createdAt']); ?></td>
+                                    <td>
+                                        <?php
+                                        $itemCount = count($order['lineItems']);
+                                        $itemSummary = array();
+                                        foreach ($order['lineItems'] as $item) {
+                                            $itemSummary[] = $item['quantity'] . 'x ' . htmlspecialchars($item['title']);
+                                        }
+                                        echo implode('<br>', array_slice($itemSummary, 0, 3));
+                                        if (count($itemSummary) > 3) {
+                                            echo '<br>+' . (count($itemSummary) - 3) . ' more items';
+                                        }
+                                        ?>
+                                    </td>
+                                    <td>
+                                        <?php echo $order['currency']; ?>             <?php echo number_format($order['totalPrice'], 2); ?>
+                                        <br>
+                                        <small style="color: #5c5f62;">
+                                            (Subtotal: <?php echo number_format($order['subtotalPrice'], 2); ?>
+                                            <br>Tax: <?php echo number_format($order['totalTax'], 2); ?>)
+                                        </small>
+                                    </td>
+                                    <td>
+                                        <span
+                                            class="order-status status-<?php echo str_replace(' ', '_', strtolower($order['financialStatus'])); ?>">
+                                            <?php echo htmlspecialchars($order['financialStatus']); ?>
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span
+                                            class="order-status status-<?php echo str_replace(' ', '_', strtolower($order['fulfillmentStatus'])); ?>">
+                                            <?php echo htmlspecialchars($order['fulfillmentStatus']); ?>
+                                        </span>
+                                    </td>
+                                </tr>
                             <?php endforeach; ?>
                         </tbody>
                     </table>
                 </div>
-                
+
                 <?php if (count($customer['orders']) == 50): ?>
-                <p style="margin-top: 10px; text-align: center; color: #5c5f62; font-size: 13px;">
-                    Showing last 50 orders. <a href="https://<?php echo htmlspecialchars($shop); ?>/admin/customers/<?php echo $customer_id; ?>" target="_blank">View all in Shopify Admin</a>
-                </p>
+                    <p style="margin-top: 10px; text-align: center; color: #5c5f62; font-size: 13px;">
+                        Showing last 50 orders. <a
+                            href="https://<?php echo htmlspecialchars($shop); ?>/admin/customers/<?php echo $customer_id; ?>"
+                            target="_blank">View all in Shopify Admin</a>
+                    </p>
                 <?php endif; ?>
             <?php else: ?>
                 <div class="no-orders">
                     <p>No orders found for this customer.</p>
                 </div>
             <?php endif; ?>
-            
+
         <?php endif; ?>
     </div>
 </body>

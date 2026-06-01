@@ -82,6 +82,7 @@ function renderNavigation($app_url, $shop) {
             <div class="nav-box">
                 <a class="nav-link" href="<?php echo htmlspecialchars($app_url, ENT_QUOTES, 'UTF-8'); ?>/pages/products.php?shop=<?php echo urlencode($shop); ?>">Products</a>  
                 <a class="nav-link" href="<?php echo htmlspecialchars($app_url, ENT_QUOTES, 'UTF-8'); ?>/pages/customers.php?shop=<?php echo urlencode($shop); ?>">Customers</a>
+                <a class="nav-link" href="<?php echo htmlspecialchars($app_url, ENT_QUOTES, 'UTF-8'); ?>/pages/orders.php?shop=<?php echo urlencode($shop); ?>">Orders</a>
                 <!-- <a class="nav-link" href="<?php echo htmlspecialchars($app_url, ENT_QUOTES, 'UTF-8'); ?>/pages/settings.php?shop=<?php echo urlencode($shop); ?>">Settings</a> -->
             </div>
         </div>

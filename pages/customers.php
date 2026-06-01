@@ -52,8 +52,6 @@ $hasNextPage = false;
 $hasPreviousPage = false;
 $nextCursor = null;
 $previousCursor = null;
-
-// Function to execute GraphQL queries
 function executeGraphQLQuery($access_token, $shop, $query, $variables = null) {
     global $api_version;
     $url = "https://" . $shop . "/admin/api/" . $api_version . "/graphql.json";
@@ -104,7 +102,6 @@ function executeGraphQLQuery($access_token, $shop, $query, $variables = null) {
 
 if ($access_token) {
     if ($active_tab == 'customers') {
-        // Get total customers count
         $countQuery = <<<GRAPHQL
 query CountCustomers {
   customersCount {
@@ -119,8 +116,6 @@ GRAPHQL;
             $totalCustomers = $countResult['data']['data']['customersCount']['count'];
             error_log("CUSTOMERS: Total customers count = " . $totalCustomers);
         }
-        
-        // Build customers query with cursor-based pagination
         $first = $customersPerPage;
         $last = null;
         $before = null;
@@ -377,10 +372,7 @@ GRAPHQL;
             }
         }
     } elseif ($active_tab == 'segments') {
-        // Fetch customer segments
         error_log("SEGMENTS: Fetching customer segments via GraphQL");
-        
-        // First, try to check if segments query is available
         $testQuery = <<<GRAPHQL
 query {
   __type(name: "Segment") {
@@ -651,7 +643,6 @@ if ($totalCustomers > 0) {
                 <?php endif; ?>
                 
             <?php elseif ($active_tab == 'segments'): ?>
-                <!-- Customer Segments Table -->
                 <div class="table-header">
                     <div class="customer-count-info">
                         <?php 
@@ -722,109 +713,7 @@ if ($totalCustomers > 0) {
         <?php endif; ?>
     </div>
 
-    <style>
-        .search-btn, .clear-btn {
-            padding: 8px 16px;
-            border-radius: 6px;
-            font-size: 14px;
-            font-weight: 500;
-            cursor: pointer;
-            border: none;
-            text-decoration: none;
-            display: inline-block;
-        }
-        
-        .search-btn {
-            background: #008060;
-            color: white;
-        }
-        
-        .search-btn:hover {
-            background: #006e52;
-        }
-        
-        .clear-btn {
-            background: #6b7280;
-            color: white;
-        }
-        
-        .clear-btn:hover {
-            background: #4b5563;
-        }
-        
-        .search-box form {
-            display: flex;
-            gap: 10px;
-            align-items: center;
-        }
-        
-        .segments-table tbody tr {
-            cursor: pointer;
-            transition: background 0.2s;
-        }
-        
-        .segments-table tbody tr:hover {
-            background: #fafbfb;
-        }
-        
-        .segment-name-cell strong {
-            color: #202223;
-        }
-        
-        .no-segments {
-            text-align: center;
-            padding: 60px 20px;
-            background: white;
-            border-radius: 8px;
-            border: 1px solid #e1e3e5;
-        }
-        
-        @media (max-width: 768px) {
-            .search-box form {
-                flex-direction: column;
-                width: 100%;
-            }
-            
-            .search-input {
-                width: 100%;
-            }
-            
-            .segments-table,
-            .segments-table thead,
-            .segments-table tbody,
-            .segments-table tr,
-            .segments-table td {
-                display: block;
-            }
-            
-            .segments-table thead tr {
-                display: none;
-            }
-            
-            .segments-table tr {
-                margin-bottom: 15px;
-                border: 1px solid #e1e3e5;
-                border-radius: 8px;
-                padding: 10px;
-            }
-            
-            .segments-table td {
-                padding: 8px;
-                text-align: left;
-                border-bottom: none;
-            }
-            
-            .segments-table td:before {
-                content: attr(data-label);
-                font-weight: 600;
-                display: inline-block;
-                width: 120px;
-            }
-        }
-    </style>
-
     <script>
-        // Make segment rows clickable
         document.addEventListener('DOMContentLoaded', function() {
             var segmentRows = document.querySelectorAll('.segment-row');
             for (var i = 0; i < segmentRows.length; i++) {
